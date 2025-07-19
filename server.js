@@ -59,6 +59,28 @@ app.get('/results', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch results' });
   }
 });
+const allowedResetIP = '104.251.249.8'; // Replace with your real IP
+
+// Endpoint to reset all votes (restricted to your IP)
+app.delete('/reset', async (req, res) => {
+  const clientIP =
+    req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+
+  // Log IP for debugging
+  console.log(`Reset attempt from IP: ${clientIP}`);
+
+  if (!clientIP.includes(allowedResetIP)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  try {
+    await Vote.deleteMany({});
+    res.json({ success: true, message: 'All votes have been reset.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reset votes' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
