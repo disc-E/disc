@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URI = 'mongodb+srv://DISC:discE140@disc.nouqtkh.mongodb.net/zeitgeist?retryWrites=true&w=majority&appName=DISC';
 
 // Optional: restrict manual reset to specific IPs
-const ALLOWED_IPS = ['YOUR_IP_HERE']; // Add your IP here, or leave empty to allow all
+const ALLOWED_IPS = ['104.251.249.8']; // Add your IP here, or leave empty to allow all
 
 app.use(cors());
 app.use(express.json());
