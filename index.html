@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ZEITGEIST</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      padding: 30px;
+    }
+
+    .poll-container {
+      max-width: 600px;
+      background: white;
+      padding: 20px;
+      margin: auto;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin-top: 15px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #shopLink {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    #shopLink a {
+      display: inline-block;
+      margin-top: 10px;
+      text-decoration: none;
+      background-color: #007BFF;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+    }
+
+    .results {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    canvas {
+      background: #fff;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="poll-container">
+    <h1>ZEITGEIST</h1>
+    <h2>today i feel...</h2>
+
+    <input type="text" id="userVote" placeholder="good? tired? ok?">
+    <button id="voteButton" onclick="submitVote()">zeitgeist</button>
+
+    <div class="results" id="results" style="display:none;">
+      <h3>zeitgeist:</h3>
+      <canvas id="resultsChart" width="800" height="600"></canvas>
+    </div>
+
+    <div id="shopLink">
+      <p>disc print</p>
+      <a href="shop.html">shirts</a>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<script>
+  const API_BASE = 'http://localhost:3000'; // Update to match your backend if hosted elsewhere
+  let chart;
+
+  function submitVote() {
+    const input = document.getElementById("userVote");
+    const vote = input.value.trim();
+
+    if (vote === "") {
+      alert("Please enter how you feel.");
+      return;
+    }
+
+    fetch(`${API_BASE}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: vote })
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Vote failed');
+      input.value = "";
+      displayResults();
+      document.getElementById("shopLink").style.display = "block";
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Failed to submit vote.");
+    });
+  }
+
+  function invertHex(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const r = (255 - parseInt(hex.substring(0, 2), 16)).toString(16).padStart(2, '0');
+    const g = (255 - parseInt(hex.substring(2, 4), 16)).toString(16).padStart(2, '0');
+    const b = (255 - parseInt(hex.substring(4, 6), 16)).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
+
+ function displayResults() {
+  fetch(`${API_BASE}/results`)
+    .then(res => res.json())
+    .then(data => {
+      const resultsDiv = document.getElementById("results");
+      resultsDiv.style.display = "block";
+
+      const entries = data.map(({ label, count }) => ({ label, count }));
+
+      entries.sort((a, b) => b.count - a.count);
+      const top3 = entries.slice(0, 3);
+
+      const radius = 150;
+      const angleStep = (2 * Math.PI) / top3.length;
+      const colors = ['#ff69b4', '#32cd32', '#ffff00'];
+
+      const chartData = top3.map((entry, i) => {
+        const angle = i * angleStep;
+        const color = colors[i % colors.length];
+        const inverseColor = invertHex(color);
+        return {
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle),
+          r: entry.count * 10,
+          label: entry.label,
+          backgroundColor: color,
+          textColor: inverseColor
+        };
+      });
+
+      if (chart) chart.destroy();
+
+      const ctx = document.getElementById("resultsChart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: 'bubble',
+        data: {
+          datasets: chartData.map(d => ({
+            label: d.label,
+            data: [{ x: d.x, y: d.y, r: d.r }],
+            backgroundColor: d.backgroundColor,
+            datalabels: {
+              align: 'center',
+              anchor: 'center',
+              font: {
+                weight: 'bold',
+                size: 16
+              },
+              color: d.textColor,
+              formatter: () => d.label
+            }
+          }))
+        },
+        options: {
+          plugins: {
+            datalabels: {
+              display: true
+            },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  const label = context.dataset.label || '';
+                  const count = context.dataset.data[0].r / 10;
+                  return `${label}: ${count} vote(s)`;
+                }
+              }
+            },
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              display: false,
+              min: -400,
+              max: 400
+            },
+            y: {
+              display: false,
+              min: -400,
+              max: 400
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Failed to load results.");
+    });
+}
+
+
+  window.onload = displayResults;
+</script>
+</body>
+</html>
