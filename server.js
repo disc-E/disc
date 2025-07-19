@@ -49,6 +49,15 @@ app.post('/vote', async (req, res) => {
   }
 });
 
+app.post('/reset', async (req, res) => {
+  try {
+    await Vote.deleteMany({});
+    res.json({ success: true, message: 'Votes reset successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reset votes' });
+  }
+});
 
 // Endpoint to fetch results
 app.get('/results', async (req, res) => {
