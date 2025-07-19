@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cron = require('node-cron');
+const moment = require('moment-timezone');
 
 const app = express();
 const PORT = 3000;
@@ -79,6 +81,18 @@ app.delete('/reset', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to reset votes' });
+  }
+});
+// Schedule daily reset at midnight Eastern Time
+cron.schedule('0 0 * * *', async () => {
+  const nowET = moment().tz('America/New_York');
+  console.log(`🕛 Running daily reset at midnight ET: ${nowET.format()}`);
+
+  try {
+    await Vote.deleteMany({});
+    console.log('✅ Daily vote reset completed');
+  } catch (err) {
+    console.error('❌ Failed to reset votes:', err);
   }
 });
 
