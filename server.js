@@ -2,23 +2,20 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const cron = require('node-cron');
-const moment = require('moment-timezone');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// Replace with your actual MongoDB connection string
+const MONGO_URI = 'mongodb+srv://DISC:discE140@disc.nouqtkh.mongodb.net/zeitgeist?retryWrites=true&w=majority&appName=DISC';
+
+// Optional: restrict manual reset to specific IPs
+const ALLOWED_IPS = ['YOUR_IP_HERE']; // Add your IP here, or leave empty to allow all
 
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
-mongoose.connect('mongodb+srv://DISC:discE140@disc.nouqtkh.mongodb.net/zeitgeist?retryWrites=true&w=majority&appName=DISC', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
-
-// Define schema and model
+// MongoDB schema
 const voteSchema = new mongoose.Schema({
   label: { type: String, required: true, lowercase: true, trim: true },
   count: { type: Number, default: 1 }
@@ -26,7 +23,15 @@ const voteSchema = new mongoose.Schema({
 
 const Vote = mongoose.model('Vote', voteSchema);
 
-// Endpoint to submit a vote
+// Connect to MongoDB
+mongoose.connect(MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('✅ Connected to MongoDB'))
+.catch(err => console.error('❌ MongoDB connection error:', err));
+
+// Submit a vote
 app.post('/vote', async (req, res) => {
   const { answer } = req.body;
 
@@ -49,20 +54,10 @@ app.post('/vote', async (req, res) => {
   }
 });
 
-app.post('/reset', async (req, res) => {
-  try {
-    await Vote.deleteMany({});
-    res.json({ success: true, message: 'Votes reset successfully' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to reset votes' });
-  }
-});
-
-// Endpoint to fetch results
+// Get top 3 results
 app.get('/results', async (req, res) => {
   try {
-    const votes = await Vote.find().sort({ count: -1 }).limit(3); // top 3
+    const votes = await Vote.find().sort({ count: -1 }).limit(3);
     const results = votes.map(v => ({ label: v.label, count: v.count }));
     res.json(results);
   } catch (err) {
@@ -70,41 +65,36 @@ app.get('/results', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch results' });
   }
 });
-const allowedResetIP = '104.251.249.8'; // Replace with your real IP
 
-// Endpoint to reset all votes (restricted to your IP)
-app.delete('/reset', async (req, res) => {
-  const clientIP =
-    req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+// Manual reset (optional IP restriction)
+app.post('/reset', async (req, res) => {
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
 
-  // Log IP for debugging
-  console.log(`Reset attempt from IP: ${clientIP}`);
-
-  if (!clientIP.includes(allowedResetIP)) {
-    return res.status(403).json({ error: 'Access denied' });
+  if (ALLOWED_IPS.length > 0 && !ALLOWED_IPS.includes(clientIp)) {
+    return res.status(403).json({ error: 'Unauthorized IP' });
   }
 
   try {
     await Vote.deleteMany({});
-    res.json({ success: true, message: 'All votes have been reset.' });
+    console.log(`🧹 Manual reset triggered by IP: ${clientIp}`);
+    res.json({ success: true, message: 'Votes manually reset.' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to reset votes' });
+    console.error('❌ Manual reset failed:', err);
+    res.status(500).json({ error: 'Manual reset failed' });
   }
 });
-// Schedule daily reset at midnight Eastern Time
-cron.schedule('0 0 * * *', async () => {
-  const nowET = moment().tz('America/New_York');
-  console.log(`🕛 Running daily reset at midnight ET: ${nowET.format()}`);
 
+// Auto reset every day at 5:00 AM UTC = Midnight Eastern Time
+cron.schedule('0 5 * * *', async () => {
   try {
     await Vote.deleteMany({});
-    console.log('✅ Daily vote reset completed');
+    console.log('🔁 Auto reset of votes completed at midnight Eastern.');
   } catch (err) {
-    console.error('❌ Failed to reset votes:', err);
+    console.error('❌ Auto reset failed:', err);
   }
 });
 
+// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
